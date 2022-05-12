@@ -1527,6 +1527,7 @@ return [
 			$services->getMainWANObjectCache(),
 			$services->getDBLoadBalancer(),
 			$services->getLinkCache(),
+			$services->getLinksMigration(),
 			$services->getCommentStore(),
 			$services->getHookContainer(),
 			$services->getPageStore()
