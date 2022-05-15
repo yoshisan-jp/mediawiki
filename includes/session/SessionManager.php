@@ -365,7 +365,7 @@ class SessionManager implements SessionManagerInterface {
 		}
 
 		// @phan-suppress-next-line PhanTypePossiblyInvalidDimOffset False positive
-		return $this->getSessionFromInfo( $infos[0], $request );
+		return $this->getSessionFromInfo( $infos[0], $request, true );
 	}
 
 	public function invalidateSessionsForUser( User $user ) {
@@ -542,8 +542,9 @@ class SessionManager implements SessionManagerInterface {
 		usort( $infos, [ SessionInfo::class, 'compare' ] );
 		$retInfos = [];
 		while ( $infos ) {
+			$tombstoned = false;
 			$info = array_pop( $infos );
-			if ( $this->loadSessionInfoFromStore( $info, $request ) ) {
+			if ( $this->loadSessionInfoFromStore( $info, $request, $tombstoned ) ) {
 				$retInfos[] = $info;
 				while ( $infos ) {
 					/** @var SessionInfo $info */
@@ -562,8 +563,10 @@ class SessionManager implements SessionManagerInterface {
 						$info->getProvider()->unpersistSession( $request );
 					}
 				}
-			} else {
-				// Session load failed, so unpersist it from this request
+			} elseif ( !$tombstoned ) {
+				// Session load failed, so unpersist it from this request; but don't unpersist
+				// tombstoned sessions to avoid unpersisting the user's newer, valid session
+				// via a race condition (T299193).
 				$this->logUnpersist( $info, $request );
 				$info->getProvider()->unpersistSession( $request );
 			}
@@ -584,9 +587,16 @@ class SessionManager implements SessionManagerInterface {
 	 *
 	 * @param SessionInfo &$info Will likely be replaced with an updated SessionInfo instance
 	 * @param WebRequest $request
+	 * @param bool &$tombstoned Output parameter telling whether the session was tombstoned.
+	 *   Tombstoned sessions should be treated as nonexistent, but care should be taken not to
+	 *   overwrite another valid session the user might have.
 	 * @return bool Whether the session info matches the stored data (if any)
 	 */
-	private function loadSessionInfoFromStore( SessionInfo &$info, WebRequest $request ) {
+	private function loadSessionInfoFromStore(
+		SessionInfo &$info,
+		WebRequest $request,
+		bool &$tombstoned = false
+	) {
 		$key = $this->store->makeKey( 'MWSession', $info->getId() );
 		$blob = $this->store->get( $key );
 
@@ -695,7 +705,10 @@ class SessionManager implements SessionManagerInterface {
 
 			// Next, load the user from metadata, or validate it against the metadata.
 			$userInfo = $info->getUserInfo();
-			if ( !$userInfo ) {
+			if ( $metadata['tombstoned'] ?? false ) {
+				$tombstoned = true;
+				return $failHandler();
+			} elseif ( !$userInfo ) {
 				// For loading, id is preferred to name.
 				try {
 					if ( $metadata['userId'] ) {
@@ -874,9 +887,11 @@ class SessionManager implements SessionManagerInterface {
 	 *  own Session. Most session providers won't need this.
 	 * @param SessionInfo $info
 	 * @param WebRequest $request
+	 * @param bool $empty True when we are creating an empty session (ie. this method was called
+	 *   from getEmptySession()).
 	 * @return Session
 	 */
-	public function getSessionFromInfo( SessionInfo $info, WebRequest $request ) {
+	public function getSessionFromInfo( SessionInfo $info, WebRequest $request, $empty = false ) {
 		// @codeCoverageIgnoreStart
 		if ( defined( 'MW_NO_SESSION' ) ) {
 			$ep = defined( 'MW_ENTRY_POINT' ) ? MW_ENTRY_POINT : 'this';
@@ -907,7 +922,11 @@ class SessionManager implements SessionManagerInterface {
 				$this->config->get( MainConfigNames::ObjectCacheSessionExpiry )
 			);
 			$this->allSessionBackends[$id] = $backend;
-			$delay = $backend->delaySave();
+			// Do not save the session when we are creating an empty session. It's pointless
+			// and might result in unpersisting cookies, which is a problem when tombstoned.
+			if ( !$empty ) {
+				$delay = $backend->delaySave();
+			}
 		} else {
 			$backend = $this->allSessionBackends[$id];
 			$delay = $backend->delaySave();
