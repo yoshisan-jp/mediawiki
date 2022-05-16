@@ -215,8 +215,7 @@ class ApiQueryBacklinksprop extends ApiQueryGeneratorBase {
 		}
 
 		// Populate the rest of the query
-		// @phan-suppress-next-line PhanTypePossiblyInvalidDimOffset False positive
-		list( $idxNoFromNS, $idxWithFromNS ) = $settings['indexes'];
+		list( $idxNoFromNS, $idxWithFromNS ) = $settings['indexes'] ?? [ '', '' ];
 		// @phan-suppress-next-line PhanTypePossiblyInvalidDimOffset False positive
 		if ( isset( $linksMigration::$mapping[$settings['linktable']] ) ) {
 			// @phan-suppress-next-line PhanTypePossiblyInvalidDimOffset False positive
