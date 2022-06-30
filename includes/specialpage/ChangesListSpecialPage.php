@@ -106,7 +106,6 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 							IDatabase $dbr, &$tables, &$fields, &$conds, &$query_options, &$join_conds
 						) {
 							$conds['actor_user'] = null;
-							$join_conds['recentchanges_actor'] = [ 'JOIN', 'actor_id=rc_actor' ];
 						},
 						'isReplacedInStructuredUi' => true,
 
@@ -121,7 +120,6 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 							IDatabase $dbr, &$tables, &$fields, &$conds, &$query_options, &$join_conds
 						) {
 							$conds[] = 'actor_user IS NOT NULL';
-							$join_conds['recentchanges_actor'] = [ 'JOIN', 'actor_id=rc_actor' ];
 						},
 						'isReplacedInStructuredUi' => true,
 					]
@@ -217,7 +215,6 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 						) {
 							$user = $ctx->getUser();
 							$conds[] = 'actor_name<>' . $dbr->addQuotes( $user->getName() );
-							$join_conds['recentchanges_actor'] = [ 'JOIN', 'actor_id=rc_actor' ];
 						},
 						'cssClassSuffix' => 'self',
 						'isRowApplicableCallable' => static function ( IContextSource $ctx, RecentChange $rc ) {
@@ -238,7 +235,6 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 							} else {
 								$conds['actor_user'] = $user->getId();
 							}
-							$join_conds['recentchanges_actor'] = [ 'JOIN', 'actor_id=rc_actor' ];
 						},
 						'cssClassSuffix' => 'others',
 						'isRowApplicableCallable' => static function ( IContextSource $ctx, RecentChange $rc ) {
@@ -1763,13 +1759,11 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 			!in_array( 'unregistered', $selectedExpLevels )
 		) {
 			$conds[] = 'actor_user IS NOT NULL';
-			$join_conds['recentchanges_actor'] = [ 'JOIN', 'actor_id=rc_actor' ];
 			return;
 		}
 
 		if ( $selectedExpLevels === [ 'unregistered' ] ) {
 			$conds['actor_user'] = null;
-			$join_conds['recentchanges_actor'] = [ 'JOIN', 'actor_id=rc_actor' ];
 			return;
 		}
 
@@ -1814,7 +1808,6 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 		if ( in_array( 'unregistered', $selectedExpLevels ) ) {
 			$selectedExpLevels = array_diff( $selectedExpLevels, [ 'unregistered' ] );
 			$conditions['actor_user'] = null;
-			$join_conds['recentchanges_actor'] = [ 'JOIN', 'actor_id=rc_actor' ];
 		}
 
 		if ( $selectedExpLevels === [ 'newcomer' ] ) {
@@ -1837,7 +1830,6 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 			$conditions[] = $aboveNewcomer;
 		} elseif ( $selectedExpLevels === [ 'experienced', 'learner', 'newcomer' ] ) {
 			$conditions[] = 'actor_user IS NOT NULL';
-			$join_conds['recentchanges_actor'] = [ 'JOIN', 'actor_id=rc_actor' ];
 		}
 
 		if ( count( $conditions ) > 1 ) {
