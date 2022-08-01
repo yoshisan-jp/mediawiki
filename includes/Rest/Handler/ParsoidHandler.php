@@ -144,7 +144,7 @@ abstract class ParsoidHandler extends Handler {
 		PageConfig $pageConfig
 	): ?SelserData {
 		$oldhtml = null;
-		if ( $input->inputIsPageBundle() ) {
+		if ( $input->inputIsPageBundle() && $input->hasOriginalHtml() ) {
 			// Apply the pagebundle to the parsed doc.  This supports the
 			// simple edit scenarios where data-mw might not necessarily
 			// have been retrieved.

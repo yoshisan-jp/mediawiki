@@ -109,8 +109,10 @@ class HTMLTransformInput {
 		);
 
 		$errorMessage = '';
-		if ( !$origPb->validate( $this->getOriginalSchemaVersion(), $errorMessage ) ) {
-			throw new ClientError( $errorMessage );
+		if ( $origPb->parsoid || $origPb->mw ) {
+			if ( !$origPb->validate( $this->getOriginalSchemaVersion(), $errorMessage ) ) {
+				throw new ClientError( $errorMessage );
+			}
 		}
 
 		return $origPb;
