@@ -21,11 +21,8 @@
  * @ingroup SpecialPage
  */
 
-use MediaWiki\MainConfigNames;
 use MediaWiki\User\UserOptionsLookup;
 use Wikimedia\Rdbms\ILoadBalancer;
-use Wikimedia\Rdbms\SelectQueryBuilder;
-use Wikimedia\Rdbms\Subquery;
 
 /**
  * This is to display changes made to all articles linked in an article.
@@ -275,16 +272,10 @@ class SpecialRecentChangesLinked extends SpecialRecentChanges {
 		if ( count( $subsql ) == 1 && $dbr->unionSupportsOrderAndLimit() ) {
 			$sql = $subsql[0];
 		} else {
-			$queryBuilder = $dbr->newSelectQueryBuilder()
-				->select( '*' )
-				->from(
-					(string)( new Subquery( $dbr->unionQueries( $subsql, $dbr::UNION_DISTINCT ) ) ),
-					'main'
-				)
-				->orderBy( 'rc_timestamp', SelectQueryBuilder::SORT_DESC )
-				->setMaxExecutionTime( $this->getConfig()->get( MainConfigNames::MaxExecutionTimeForExpensiveQueries ) )
-				->limit( $limit );
-			$sql = $queryBuilder->getSQL();
+			// need to resort and relimit after union
+			$sql = $dbr->unionQueries( $subsql, $dbr::UNION_DISTINCT ) .
+				' ORDER BY rc_timestamp DESC';
+			$sql = $dbr->limitResult( $sql, $limit, false );
 		}
 		return $dbr->query( $sql, __METHOD__ );
 	}
