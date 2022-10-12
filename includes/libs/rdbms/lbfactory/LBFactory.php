@@ -222,18 +222,20 @@ abstract class LBFactory implements ILBFactory {
 	 * @warning This must only be called in top level code such as the execute()
 	 * method of a maintenance script. Any database connection in use when this
 	 * method is called will become defunct.
+	 *
+	 * @return bool true if the config changed.
 	 */
-	public function autoReconfigure(): void {
+	public function autoReconfigure(): bool {
 		if ( !$this->configCallback ) {
-			return;
+			return false;
 		}
 
 		$conf = ( $this->configCallback )();
 		if ( !$conf ) {
-			return;
+			return false;
 		}
 
-		$this->reconfigure( $conf );
+		return $this->reconfigure( $conf );
 	}
 
 	/**
@@ -253,15 +255,25 @@ abstract class LBFactory implements ILBFactory {
 	 *
 	 * @param array $conf A configuration array, using the same structure as
 	 *        the one passed to the constructor (see also $wgLBFactoryConf).
+	 *
+	 * @return bool true if the config changed.
 	 */
-	public function reconfigure( array $conf ): void {
+	public function reconfigure( array $conf ): bool {
 		if ( !$conf ) {
-			return;
+			return false;
 		}
+		if ( $conf['servers'] == $this->currentConfig['servers'] ) {
+			return false;
+		}
+
+		$this->connLogger->notice( 'Reconfiguring LBFactory!' );
+		$this->configure( $conf );
 
 		foreach ( $this->getLBsForOwner() as $lb ) {
 			$lb->reconfigure( $conf );
 		}
+
+		return true;
 	}
 
 	public function getLocalDomainID() {

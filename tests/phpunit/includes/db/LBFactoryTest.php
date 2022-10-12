@@ -818,7 +818,7 @@ class LBFactoryTest extends MediaWikiIntegrationTestCase {
 
 	public function testReconfigure() {
 		$primaryConfig = $this->getPrimaryServerConfig();
-		$fakeReplica = [ 'load' => 100, 'serverName' => 'replica' ] + $primaryConfig;
+		$fakeReplica = [ 'load' => 100, ] + $primaryConfig;
 
 		$conf = [ 'servers' => [
 			$primaryConfig,
@@ -834,20 +834,23 @@ class LBFactoryTest extends MediaWikiIntegrationTestCase {
 		$ref = $lb->getConnection( DB_REPLICA );
 
 		// Call reconfigure with the same config, should have no effect
-		$factory->reconfigure( $conf );
+		$changed = $factory->reconfigure( $conf );
+		$this->assertFalse( $changed );
 		$this->assertSame( 2, $lb->getServerCount() );
 		$this->assertTrue( $con->isOpen() );
 		$this->assertTrue( $ref->isOpen() );
 
 		// Call reconfigure with empty config, should have no effect
-		$factory->reconfigure( [] );
+		$changed = $factory->reconfigure( [] );
+		$this->assertFalse( $changed );
 		$this->assertSame( 2, $lb->getServerCount() );
 		$this->assertTrue( $con->isOpen() );
 		$this->assertTrue( $ref->isOpen() );
 
 		// Reconfigure the LBFactory to only have a single server.
 		$conf['servers'] = [ $this->getPrimaryServerConfig() ];
-		$factory->reconfigure( $conf );
+		$changed = $factory->reconfigure( $conf );
+		$this->assertTrue( $changed );
 
 		// The LoadBalancer should have been reconfigured automatically.
 		$this->assertSame( 1, $lb->getServerCount() );
@@ -866,7 +869,7 @@ class LBFactoryTest extends MediaWikiIntegrationTestCase {
 
 	public function testAutoReconfigure() {
 		$primaryConfig = $this->getPrimaryServerConfig();
-		$fakeReplica = [ 'load' => 100, 'serverName' => 'replica1' ] + $primaryConfig;
+		$fakeReplica = [ 'load' => 100, ] + $primaryConfig;
 
 		$conf = [
 			'servers' => [
@@ -878,14 +881,7 @@ class LBFactoryTest extends MediaWikiIntegrationTestCase {
 		// The config callback should return $conf, reflecting changes
 		// made to the local variable.
 		$conf['configCallback'] = static function () use ( &$conf ) {
-			static $calls = 0;
-			$calls++;
-			if ( $calls == 1 ) {
-				return $conf;
-			} else {
-				unset( $conf['servers'][1] );
-				return $conf;
-			}
+			return $conf;
 		};
 
 		// Configure an LBFactory with one replica
@@ -898,14 +894,19 @@ class LBFactoryTest extends MediaWikiIntegrationTestCase {
 		$ref = $lb->getConnection( DB_REPLICA );
 
 		// Nothing changed, autoReconfigure() should do nothing.
-		$factory->autoReconfigure();
+		$changed = $factory->autoReconfigure();
+		$this->assertFalse( $changed );
 
 		$this->assertSame( 2, $lb->getServerCount() );
 		$this->assertTrue( $con->isOpen() );
 		$this->assertTrue( $ref->isOpen() );
 
+		// Change config to only have a single server.
+		$conf['servers'] = [ $this->getPrimaryServerConfig() ];
+
 		// Now autoReconfigure() should detect the change and reconfigure all LoadBalancers.
-		$factory->autoReconfigure();
+		$changed = $factory->autoReconfigure();
+		$this->assertTrue( $changed );
 
 		// The LoadBalancer should have been reconfigured now.
 		$this->assertSame( 1, $lb->getServerCount() );

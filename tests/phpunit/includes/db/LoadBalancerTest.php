@@ -500,19 +500,14 @@ class LoadBalancerTest extends MediaWikiIntegrationTestCase {
 	}
 
 	public function testReconfigure() {
-		$serverA = $this->makeServerConfig();
-		$serverA['serverName'] = 'test_one';
-
-		$serverB = $this->makeServerConfig();
-		$serverB['serverName'] = 'test_two';
 		$conf = [
-			'servers' => [ $serverA, $serverB ],
+			'servers' => [ $this->makeServerConfig() ],
 			'clusterName' => 'A',
 			'localDomain' => $this->db->getDomainID()
 		];
 
 		$lb = new LoadBalancer( $conf );
-		$this->assertSame( 2, $lb->getServerCount() );
+		$this->assertSame( 'A', $lb->getClusterName() );
 
 		$con = $lb->getConnectionInternal( DB_PRIMARY );
 		$ref = $lb->getConnection( DB_PRIMARY );
@@ -520,10 +515,10 @@ class LoadBalancerTest extends MediaWikiIntegrationTestCase {
 		$this->assertTrue( $con->isOpen() );
 		$this->assertTrue( $ref->isOpen() );
 
-		// Depool the second server
-		$conf['servers'] = [ $serverA ];
+		// Reconfigure the LoadBalancer
+		$conf['clusterName'] = 'X';
 		$lb->reconfigure( $conf );
-		$this->assertSame( 1, $lb->getServerCount() );
+		$this->assertSame( 'X', $lb->getClusterName() );
 
 		// Reconfiguring should not close connections immediately.
 		$this->assertTrue( $con->isOpen() );
