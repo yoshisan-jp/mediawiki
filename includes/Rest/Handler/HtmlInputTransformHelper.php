@@ -27,6 +27,7 @@ use InvalidArgumentException;
 use Language;
 use Liuggio\StatsdClient\Factory\StatsdDataFactoryInterface;
 use MediaWiki\Edit\ParsoidOutputStash;
+use MediaWiki\Edit\SelserContext;
 use MediaWiki\MainConfigNames;
 use MediaWiki\Page\PageIdentity;
 use MediaWiki\Parser\Parsoid\HTMLTransform;
@@ -46,7 +47,6 @@ use Status;
 use Wikimedia\Message\MessageValue;
 use Wikimedia\ParamValidator\ParamValidator;
 use Wikimedia\Parsoid\Core\ClientError;
-use Wikimedia\Parsoid\Core\PageBundle;
 use Wikimedia\Parsoid\Core\ResourceLimitExceededException;
 use Wikimedia\Parsoid\Parsoid;
 
@@ -399,7 +399,8 @@ class HtmlInputTransformHelper {
 		}
 
 		if ( isset( $original['source']['body'] ) ) {
-			// XXX: do we really have to support wikitext overrides?
+			// NOTE: We need this when the original HTML is a rendering of unsaved wikitext.
+			//       That happens if VE was switched from source to visual mode before saving.
 			$this->transform->setOriginalText( $original['source']['body'] );
 		}
 	}
@@ -492,7 +493,7 @@ class HtmlInputTransformHelper {
 		$pb = PageBundleParserOutputConverter::pageBundleFromParserOutput( $parserOutput );
 		$renderID = $this->parsoidOutputAccess->getParsoidRenderID( $parserOutput );
 
-		return $this->makeOriginalDataArrayFromPageBundle( $pb, $renderID );
+		return $this->makeOriginalDataArrayFromSelserContext( new SelserContext( $pb, $revId ?: 0 ), $renderID );
 	}
 
 	private function fetchOriginalDataFromStash( PageIdentity $page, string $key ): ?array {
@@ -502,43 +503,53 @@ class HtmlInputTransformHelper {
 			$renderID = ParsoidRenderID::newFromKey( $key );
 		}
 
-		$pb = $this->parsoidOutputStash->get( $renderID );
+		$selserContext = $this->parsoidOutputStash->get( $renderID );
 
-		if ( !$pb ) {
-			// Looks like the rendering is gone from stash (or the client send us a bogus key).
-			// Try to load it from the parser cache instead.
-			// On a wiki with low edit frequency, there is a good chance that it's still there.
-			try {
-				$original = $this->fetchOriginalDataFromParsoid( $page, $renderID->getRevisionID(), false );
-			} catch ( HttpException $e ) {
-				// If the revision isn't found, don't trigger a 404. Return null to trigger a 412.
-				return null;
-			}
-
-			if ( !$original || $original['html']['key'] !== $renderID->getKey() ) {
-				// Nothing found in the parser cache, or it's not the correct rendering.
-				return null;
-			}
-
-			return $original;
+		if ( $renderID->getRevisionID() === 0 && $selserContext && !$selserContext->getContent() ) {
+			// Revision ID 0 means that the PageBundle represents a rendering of unsaved source content (wikitext).
+			// If we didn't get the source content from the stash, we are in trouble. We can't do selser,
+			// and we shouldn't try.
+			$selserContext = null;
 		}
 
-		return $this->makeOriginalDataArrayFromPageBundle( $pb, $renderID );
+		if ( $selserContext ) {
+			return $this->makeOriginalDataArrayFromSelserContext( $selserContext, $renderID );
+		}
+
+		// Looks like the rendering is gone from stash (or the client send us a bogus key).
+		// Try to load it from the parser cache instead.
+		// On a wiki with low edit frequency, there is a good chance that it's still there.
+		try {
+			$original = $this->fetchOriginalDataFromParsoid( $page, $renderID->getRevisionID(), false );
+		} catch ( HttpException $e ) {
+			// If the revision isn't found, don't trigger a 404. Return null to trigger a 412.
+			return null;
+		}
+
+		if ( !$original || $original['html']['key'] !== $renderID->getKey() ) {
+			// Nothing found in the parser cache, or it's not the correct rendering.
+			return null;
+		}
+
+		return $original;
 	}
 
 	/**
-	 * @param PageBundle $pb
+	 * @param SelserContext $selserContext
 	 * @param ParsoidRenderID $renderID
 	 *
 	 * @return array
 	 */
-	private function makeOriginalDataArrayFromPageBundle(
-		PageBundle $pb,
+	private function makeOriginalDataArrayFromSelserContext(
+		SelserContext $selserContext,
 		ParsoidRenderID $renderID
 	): array {
+		$pb = $selserContext->getPageBundle();
+		$content = $selserContext->getContent();
+
 		$original = [
 			'contentmodel' => $pb->contentmodel,
-			'revid' => $renderID->getRevisionID(),
+			'revid' => $selserContext->getRevisionID(),
 			'html' => [
 				'version' => $pb->version,
 				'headers' => $pb->headers ?: [],
@@ -552,6 +563,11 @@ class HtmlInputTransformHelper {
 				'body' => $pb->mw,
 			],
 		];
+
+		if ( $content ) {
+			$original['source']['headers']['content-type'] = $content->getDefaultFormat();
+			$original['source']['body'] = $content->serialize();
+		}
 
 		if ( $pb->version ) {
 			$original['html']['headers']['content-type'] =

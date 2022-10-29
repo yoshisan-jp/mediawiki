@@ -1069,6 +1069,7 @@ $wgAutoloadLocalClasses = [
 	'MediaWiki\\EditPage\\TextboxBuilder' => __DIR__ . '/includes/editpage/TextboxBuilder.php',
 	'MediaWiki\\Edit\\ParsoidOutputStash' => __DIR__ . '/includes/edit/ParsoidOutputStash.php',
 	'MediaWiki\\Edit\\PreparedEdit' => __DIR__ . '/includes/edit/PreparedEdit.php',
+	'MediaWiki\\Edit\\SelserContext' => __DIR__ . '/includes/edit/SelserContext.php',
 	'MediaWiki\\Edit\\SimpleParsoidOutputStash' => __DIR__ . '/includes/edit/SimpleParsoidOutputStash.php',
 	'MediaWiki\\Emptiable' => __DIR__ . '/includes/Emptiable.php',
 	'MediaWiki\\Export\\WikiExporterFactory' => __DIR__ . '/includes/export/WikiExporterFactory.php',

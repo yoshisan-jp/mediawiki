@@ -3,6 +3,7 @@
 namespace MediaWiki\Tests\Rest\Helper;
 
 use Exception;
+use MediaWiki\Edit\SelserContext;
 use MediaWiki\MainConfigNames;
 use MediaWiki\MainConfigSchema;
 use MediaWiki\Message\Converter;
@@ -97,7 +98,7 @@ class HtmlInputTransformHelperTest extends MediaWikiIntegrationTestCase {
 		return json_decode( $text, JSON_OBJECT_AS_ARRAY );
 	}
 
-	public function provideResponse() {
+	public function provideRequests() {
 		$profileVersion = '2.4.0';
 		$wikitextProfileUri = 'https://www.mediawiki.org/wiki/Specs/wikitext/1.0.0';
 		$htmlProfileUri = 'https://www.mediawiki.org/wiki/Specs/HTML/' . $profileVersion;
@@ -664,7 +665,7 @@ class HtmlInputTransformHelperTest extends MediaWikiIntegrationTestCase {
 	}
 
 	/**
-	 * @dataProvider provideResponse()
+	 * @dataProvider provideRequests()
 	 * @covers \MediaWiki\Rest\Handler\HtmlInputTransformHelper
 	 * @covers \MediaWiki\Parser\Parsoid\HTMLTransform
 	 */
@@ -739,7 +740,7 @@ class HtmlInputTransformHelperTest extends MediaWikiIntegrationTestCase {
 		$this->assertSame( $wikitext, $body->getContents() );
 	}
 
-	public function testResponseWithRenderId() {
+	public function testResponseWithRenderIdForExistingRevision() {
 		$profileVersion = '2.4.0';
 		$htmlProfileUri = 'https://www.mediawiki.org/wiki/Specs/HTML/' . $profileVersion;
 		$htmlContentType = "text/html;profile=\"$htmlProfileUri\"";
@@ -770,7 +771,63 @@ class HtmlInputTransformHelperTest extends MediaWikiIntegrationTestCase {
 		$params = [];
 
 		$stash = $this->getServiceContainer()->getParsoidOutputStash();
-		$stash->set( ParsoidRenderID::newFromETag( $eTag ), $pb );
+		$stash->set(
+			ParsoidRenderID::newFromETag( $eTag ),
+			new SelserContext( $pb, $page->getLatest() ),
+		);
+
+		$helper = $this->newHelper();
+		$helper->init( $page, $body, $params );
+
+		$content = $helper->getContent();
+
+		// Assert that we get back the old wikitext, not wikitext derived from the HTML.
+		// Since the supplied HTML is the same as the HTML in the stash, selser should
+		// decide that there is nothing to do and return the wikitext unchanged.
+		$this->assertSame( $oldWikitext, $content->serialize() );
+	}
+
+	public function testResponseWithRenderIdForUnsavedWikitext() {
+		$profileVersion = '2.4.0';
+		$htmlProfileUri = 'https://www.mediawiki.org/wiki/Specs/HTML/' . $profileVersion;
+		$htmlContentType = "text/html;profile=\"$htmlProfileUri\"";
+
+		$htmlHeaders = [
+			'content-type' => $htmlContentType,
+		];
+
+		$page = $this->getNonexistingTestPage();
+
+		$html = $this->getTextFromFile( 'MainPage-original.html' );
+		$dataParsoid = $this->getJsonFromFile( 'MainPage-original.data-parsoid' );
+		$oldWikitext = 'Fake old wikitext';
+
+		$content = new WikitextContent( $oldWikitext );
+		$pb = new PageBundle(
+			$html,
+			$dataParsoid,
+			[],
+			$profileVersion,
+			$htmlHeaders,
+			CONTENT_MODEL_WIKITEXT
+		);
+
+		// NOTE: Using 0 as the prefix in the ETag indicates that the content does
+		// not correspond to a saved revision. Since we don't have a revision
+		// ID that we could use to load the wikitext from the database,
+		// the wikitext should be taken from the stash.
+		// That is the behavior asserted by this test case.
+		$eTag = '"0/just-a-test/edit"';
+
+		// Load the original data based on the ETag
+		$body = [ 'html' => $html, 'original' => [ 'renderid' => $eTag ] ];
+		$params = [];
+
+		$stash = $this->getServiceContainer()->getParsoidOutputStash();
+		$stash->set(
+			ParsoidRenderID::newFromETag( $eTag ),
+			new SelserContext( $pb, 0, $content )
+		);
 
 		$helper = $this->newHelper();
 		$helper->init( $page, $body, $params );

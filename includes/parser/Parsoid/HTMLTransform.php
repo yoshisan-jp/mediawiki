@@ -482,8 +482,8 @@ class HTMLTransform {
 		return $this->oldid;
 	}
 
-	public function knowsOriginalRevision(): bool {
-		return $this->originalRevision || $this->oldid;
+	public function knowsOriginalContent(): bool {
+		return $this->originalRevision || $this->oldid || $this->originalText !== null;
 	}
 
 	public function getContentModel(): ?string {
@@ -592,13 +592,10 @@ class HTMLTransform {
 	private function getSelserData(): ?SelserData {
 		$oldhtml = $this->hasOriginalHtml() ? $this->getOriginalHtml() : null;
 
-		// As per https://www.mediawiki.org/wiki/Parsoid/API#v1_API_entry_points
-		//   "Both it and the oldid parameter are needed for
-		//    clean round-tripping of HTML retrieved earlier with"
-		// So, no oldid => no selser
-		$hasOldId = $this->knowsOriginalRevision();
+		// Selser requires knowledge of the original wikitext.
+		$knowsOriginal = $this->knowsOriginalContent();
 
-		if ( $hasOldId && !empty( $this->parsoidSettings['useSelser'] ) ) {
+		if ( $knowsOriginal && !empty( $this->parsoidSettings['useSelser'] ) ) {
 			if ( !$this->getPageConfig()->getRevisionContent() ) {
 				throw new HttpException( 'Could not find previous revision. Has the page been locked / deleted?',
 					409 );
