@@ -194,6 +194,9 @@ because of Phabricator reports.
 * DifferenceEngine::textDiff(), deprecated since 1.32, has been removed.
 * Skin::getSearchPageTitle() and Skin::setSearchPageTitle(), deprecated since
   1.38, have been removed.
+* Clarified that the InitializeArticleMaybeRedirect hook should not change
+  its $article parameter; the behavior when doing so was previously
+  undocumented.
 * …
 
 === Deprecations in 1.40 ===
