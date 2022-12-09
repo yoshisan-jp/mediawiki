@@ -285,13 +285,15 @@ abstract class ParsoidHandler extends Handler {
 	 * @param array $attribs
 	 * @param ?string $source
 	 * @param PageConfig|PageIdentity $page
+	 * @param ?int $revId
 	 *
 	 * @return HtmlOutputRendererHelper
 	 */
 	private function getHtmlOutputRendererHelper(
 		array $attribs,
 		?string $source,
-		$page
+		$page,
+		?int $revId
 	): HtmlOutputRendererHelper {
 		$services = MediaWikiServices::getInstance();
 
@@ -318,7 +320,7 @@ abstract class ParsoidHandler extends Handler {
 		$user = RequestContext::getMain()->getUser();
 
 		$params = [];
-		$helper->init( $page, $params, $user );
+		$helper->init( $page, $params, $user, $revId );
 
 		// XXX: should default to the page's content model?
 		$model = $attribs['opts']['contentmodel']
@@ -823,7 +825,8 @@ abstract class ParsoidHandler extends Handler {
 		$helper = $this->getHtmlOutputRendererHelper(
 			$attribs,
 			$wikitext,
-			$pageConfig
+			$pageConfig,
+			$pageConfig->getRevisionId()
 		);
 
 		if ( !$this->allowParserCacheWrite() ) {
