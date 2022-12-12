@@ -74,6 +74,11 @@ class ParsoidOutputAccess {
 	 */
 	public const OPT_NO_UPDATE_CACHE = 2;
 
+	/**
+	 * @var int Collect linter data for the ParserLogLinterData hook.
+	 */
+	public const OPT_LOG_LINT_DATA = 64;
+
 	public const CONSTRUCTOR_OPTIONS = [
 		MainConfigNames::ParsoidCacheConfig,
 		MainConfigNames::ParsoidSettings,
@@ -218,8 +223,16 @@ class ParsoidOutputAccess {
 			}
 		}
 
+		$parsoidOptions = [];
+
+		if ( $options & self::OPT_LOG_LINT_DATA ) {
+			$parsoidOptions += [
+				'logLinterData' => true
+			];
+		}
+
 		$startTime = microtime( true );
-		$status = $this->parse( $page, $parserOpts, [], $revision );
+		$status = $this->parse( $page, $parserOpts, $parsoidOptions, $revision );
 		$time = microtime( true ) - $startTime;
 
 		if ( !$status->isOK() ) {
