@@ -30,7 +30,6 @@ use MediaWiki\Edit\SelserContext;
 use MediaWiki\Languages\LanguageFactory;
 use MediaWiki\MainConfigNames;
 use MediaWiki\Page\PageIdentity;
-use MediaWiki\Page\PageRecord;
 use MediaWiki\Parser\Parsoid\HtmlTransformFactory;
 use MediaWiki\Parser\Parsoid\PageBundleParserOutputConverter;
 use MediaWiki\Parser\Parsoid\ParsoidOutputAccess;
@@ -534,9 +533,8 @@ class HtmlOutputRendererHelper {
 			// If we have a revision and the ID is 0 or null, then it's a fake revision
 			// representing a preview.
 			$isFakeRevision = $this->getRevisionId() === null;
-			$pageRecordAvailable = $this->page instanceof PageRecord;
 
-			if ( $pageRecordAvailable && !$isFakeRevision && !$parsoidOptions && $this->isCacheable ) {
+			if ( !$isFakeRevision && !$parsoidOptions && $this->isCacheable ) {
 				$status = $this->parsoidOutputAccess->getParserOutput(
 					$this->page,
 					$parserOptions,
