@@ -1646,8 +1646,7 @@ return [
 		'dependencies' => [
 			'mediawiki.page.gallery.styles',
 			'mediawiki.util'
-		],
-		'targets' => [ 'desktop', 'mobile' ],
+		]
 	],
 	'mediawiki.page.gallery.styles' => [
 		'styles' => [
@@ -1670,8 +1669,7 @@ return [
 		],
 		'messages' => [
 			'gallery-slideshow-toggle'
-		],
-		'targets' => [ 'desktop', 'mobile' ],
+		]
 	],
 	'mediawiki.page.ready' => [
 		'localBasePath' => "$wgBaseDirectory/resources/src/mediawiki.page.ready",
