@@ -41,7 +41,6 @@
 			this.showCurrentImage();
 			return false;
 		}.bind( this ) );
-		this.$gallery.addClass( 'mw-gallery-slideshow-ooui' );
 	};
 
 	/* Properties */
@@ -213,11 +212,7 @@
 			.removeAttr( 'height' );
 
 		// Stretch image to take up the required size
-		var imageHeight = this.imageHeight - this.$imgCaption.outerHeight();
-		this.$img.attr( 'height', imageHeight );
-		// also add to the image above in case the image exhibits responsive behaviours
-		// e.g. skin sets height to 100%.
-		this.$img.parent( 'a.image' ).height( imageHeight );
+		this.$img.attr( 'height', ( this.imageHeight - this.$imgCaption.outerHeight() ) + 'px' );
 
 		// Make the image smaller in case the current image
 		// size is larger than the original file size.
@@ -228,14 +223,10 @@
 				info.thumbwidth < this.$img.width() ||
 				info.thumbheight < this.$img.height()
 			) {
-				var attrs = {
-					width: info.thumbwidth,
-					height: info.thumbheight
-				};
-				this.$img.attr( attrs );
-				// also add to the image above in case the image exhibits responsive behaviours
-				// e.g. skin sets height to 100%.
-				this.$img.parent( 'a.image' ).css( attrs );
+				this.$img.attr( {
+					width: info.thumbwidth + 'px',
+					height: info.thumbheight + 'px'
+				} );
 			}
 		}.bind( this ) );
 	};
@@ -248,8 +239,6 @@
 	mw.GallerySlideshow.prototype.showCurrentImage = function ( init ) {
 		var $thumbnail, $imgLink,
 			$imageLi = this.getCurrentImage(),
-			thumbAlt = $imageLi.data( 'alt' ),
-			thumbUrl = $imageLi.data( 'src' ),
 			$caption = $imageLi.find( '.gallerytext' );
 
 		// The order of the following is important for size calculations
@@ -260,15 +249,12 @@
 		$imageLi.addClass( 'slideshow-current' );
 
 		this.$thumbnail = $imageLi.find( 'img' );
-		// 2a. Create thumbnail.
-		this.$img = $( '<img>' ).attr( {
-			// prefer dataset if available, as less likely to be manipulated.
-			src: thumbUrl || this.$thumbnail.attr( 'src' ),
-			alt: thumbAlt || this.$thumbnail.attr( 'alt' )
-		} );
-
-		if ( this.$img.attr( 'src' ) ) {
-			// 2b. Show thumbnail
+		if ( this.$thumbnail.length ) {
+			// 2. Create and show thumbnail
+			this.$img = $( '<img>' ).attr( {
+				src: this.$thumbnail.attr( 'src' ),
+				alt: this.$thumbnail.attr( 'alt' )
+			} );
 			// 'image' class required for detection by MultimediaViewer
 			$imgLink = $( '<a>' ).addClass( 'image' )
 				.attr( 'href', $imageLi.find( 'a' ).eq( 0 ).attr( 'href' ) )
@@ -276,7 +262,8 @@
 
 			this.$imgContainer.empty().append( $imgLink );
 		} else {
-			this.$imgContainer.html( $imageLi.find( '.thumb' ).html() );
+			// 2b. No image found (e.g. file doesn't exist)
+			this.$imgContainer.text( $imageLi.find( '.thumb' ).text() );
 		}
 
 		// 3. Copy caption
