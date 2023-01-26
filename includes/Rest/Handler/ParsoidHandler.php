@@ -300,19 +300,28 @@ abstract class ParsoidHandler extends Handler {
 		?int $revId
 	): HtmlOutputRendererHelper {
 		$services = MediaWikiServices::getInstance();
+		$start = Timing::millis();
 
 		// TODO: This method (and wt2html) should take a PageIdentity + revId,
 		//       to reduce the usage of PageConfig in MW core.
 		$page = $this->getPageConfigToIdentity( $page );
+		$pcTime = Timing::millis();
+
+		$parsoidOutputStash = $services->getParsoidOutputStash();
+		$osTime = Timing::millis();
+		$parsoidOutputAccess = $services->getParsoidOutputAccess();
+		$oaTime = Timing::millis();
 
 		$helper = new HtmlOutputRendererHelper(
-			$services->getParsoidOutputStash(),
+			$parsoidOutputStash,
 			$services->getStatsdDataFactory(),
-			$services->getParsoidOutputAccess(),
+			$parsoidOutputAccess,
 			$services->getHtmlTransformFactory(),
 			$services->getContentHandlerFactory(),
 			$services->getLanguageFactory()
 		);
+
+		$csTime = Timing::millis();
 
 		$user = RequestContext::getMain()->getUser();
 
@@ -341,6 +350,21 @@ abstract class ParsoidHandler extends Handler {
 
 		if ( isset( $attribs['envOptions']['htmlVariantLanguage'] ) ) {
 			$helper->setVariantConversionLanguage( $attribs['envOptions']['htmlVariantLanguage'] );
+		}
+
+		$initTime = Timing::millis();
+
+		if ( $initTime - $start > 50 ) {
+			LoggerFactory::getInstance( 'slow-parsoid' )
+				->info( 'Getting Parsoid output access took {access}ms,' .
+						' pc to identity took {pc}ms, output stash took {stash}ms,' .
+						' construct took {const}ms, init took {init}ms.', [
+					'pc' => $pcTime - $start,
+					'stash' => $osTime - $pcTime,
+					'access' => $oaTime - $osTime,
+					'const' => $csTime - $oaTime,
+					'init' => $initTime - $csTime,
+				] );
 		}
 
 		return $helper;
@@ -809,6 +833,7 @@ abstract class ParsoidHandler extends Handler {
 		// init refers to time elapsed before parsing begins
 		$metrics = $this->metrics;
 		$timing = Timing::start( $metrics );
+		$start = Timing::millis();
 
 		$helper = $this->getHtmlOutputRendererHelper(
 			$attribs,
@@ -817,12 +842,16 @@ abstract class ParsoidHandler extends Handler {
 			$pageConfig->getRevisionId()
 		);
 
+		$helperConstruct = Timing::millis();
+
 		if ( !$this->allowParserCacheWrite() ) {
 			// NOTE: In theory, we want to always write to the parser cache. However,
 			//       the ParserCache takes a lot of disk space, and we need to have fine grained control
 			//       over when we write to it, so we can avoid running out of disc space.
 			$helper->setUseParserCache( true, false );
 		}
+
+		$doRand = Timing::millis();
 
 		if (
 			!empty( $this->parsoidSettings['devAPI'] ) &&
@@ -860,7 +889,15 @@ abstract class ParsoidHandler extends Handler {
 			$mstr = 'wt';
 		}
 
-		$timing->end( "wt2html.$mstr.init" );
+		$end = $timing->end( "wt2html.$mstr.init" );
+		if ( $end > 50 ) {
+			LoggerFactory::getInstance( 'slow-parsoid' )
+				->info( 'Slow Parsoid init, took {end}ms.  Helper {helper}ms, rand {rand}ms.', [
+					'end' => $end,
+					'helper' => $helperConstruct - $start,
+					'rand' => $doRand - $helperConstruct,
+				] );
+		}
 		$metrics->timing(
 			"wt2html.$mstr.size.input",
 			strlen( $pageConfig->getPageMainContent() )
