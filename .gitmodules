@@ -786,3 +786,7 @@
 	path = vendor
 	url = https://gerrit.wikimedia.org/r/mediawiki/vendor
 	branch = wmf/1.40.0-wmf.26
+[submodule "extensions/Renameuser"]
+	path = extensions/Renameuser
+	url = https://gerrit.wikimedia.org/r/mediawiki/extensions/Renameuser
+	branch = wmf/1.40.0-wmf.26
