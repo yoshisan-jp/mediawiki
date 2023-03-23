@@ -224,8 +224,6 @@ class WANObjectCache implements
 
 	/** Seconds to keep lock keys around */
 	private const LOCK_TTL = 10;
-	/** Seconds to no-op key set() calls to avoid large blob I/O stampedes */
-	private const COOLOFF_TTL = 2;
 	/** Seconds to ramp up the chance of regeneration due to expected time-till-refresh */
 	private const RAMPUP_TTL = 30;
 
@@ -1932,75 +1930,17 @@ class WANObjectCache implements
 	}
 
 	/**
-	 * Check whether to skip set() on account of concurrent I/O spike rate-limiting
-	 *
-	 * This mitigates problems caused by popular keys suddenly becoming unavailable due to
-	 * unexpected evictions or cache server outages. These cases are not handled by the usual
-	 * preemptive refresh logic.
-	 *
-	 * With a typical scale-out infrastructure, CPU and query load from getWithSetCallback()
-	 * invocations is distributed among appservers and replica DBs, but cache operations for
-	 * a given key route to a single cache server (e.g. striped consistent hashing). A set()
-	 * stampede to a key can saturate the network link to its cache server. The intensity of
-	 * the problem is proportionate to the value size and access rate. The duration of the
-	 * problem is proportionate to value regeneration time.
-	 *
-	 * @param string $key Cache key made with makeKey()/makeGlobalKey()
-	 * @param string $kClass Key collection name
-	 * @param mixed $value The regenerated value
-	 * @param float|null $elapsed Seconds spent fetching, validating, and regenerating the value
-	 * @param bool $hasLock Whether this thread has an exclusive regeneration lock
-	 * @return bool Whether it is OK to proceed with a key set operation
+	 * @param string $key
+	 * @param string $kClass
+	 * @param mixed $value
+	 * @param float|null $elapsed
+	 * @param bool $hasLock
+	 * @return bool True
 	 */
 	private function checkAndSetCooloff( $key, $kClass, $value, $elapsed, $hasLock ) {
-		if ( is_scalar( $value ) ) {
-			// Roughly estimate the size of the value once serialized
-			$hypotheticalSize = strlen( (string)$value );
-		} else {
-			// Treat the value is a generic sizable object
-			$hypotheticalSize = $this->keyHighByteSize;
-		}
-
-		if ( !$hasLock ) {
-			// Suppose that this cache key is very popular (KEY_HIGH_QPS reads/second).
-			// After eviction, there will be cache misses until it gets regenerated and saved.
-			// If the time window when the key is missing lasts less than one second, then the
-			// number of misses will not reach KEY_HIGH_QPS. This window largely corresponds to
-			// the key regeneration time. Estimate the count/rate of cache misses, e.g.:
-			//  - 100 QPS, 20ms regeneration => ~2 misses (< 1s)
-			//  - 100 QPS, 100ms regeneration => ~10 misses (< 1s)
-			//  - 100 QPS, 3000ms regeneration => ~300 misses (100/s for 3s)
-			$missesPerSecForHighQPS = ( min( $elapsed, 1 ) * $this->keyHighQps );
-
-			// Determine whether there is enough I/O stampede risk to justify throttling set().
-			// Estimate unthrottled set() overhead, as bps, from miss count/rate and value size,
-			// comparing it to the per-key uplink bps limit (KEY_HIGH_UPLINK_BPS), e.g.:
-			//  - 2 misses (< 1s), 10KB value, 1250000 bps limit => 160000 bits (low risk)
-			//  - 2 misses (< 1s), 100KB value, 1250000 bps limit => 1600000 bits (high risk)
-			//  - 10 misses (< 1s), 10KB value, 1250000 bps limit => 800000 bits (low risk)
-			//  - 10 misses (< 1s), 100KB value, 1250000 bps limit => 8000000 bits (high risk)
-			//  - 300 misses (100/s), 1KB value, 1250000 bps limit => 800000 bps (low risk)
-			//  - 300 misses (100/s), 10KB value, 1250000 bps limit => 8000000 bps (high risk)
-			//  - 300 misses (100/s), 100KB value, 1250000 bps limit => 80000000 bps (high risk)
-			if ( ( $missesPerSecForHighQPS * $hypotheticalSize ) >= $this->keyHighUplinkBps ) {
-				$cooloffSisterKey = $this->makeSisterKey( $key, self::TYPE_COOLOFF );
-				$watchPoint = $this->cache->watchErrors();
-				if (
-					!$this->cache->add( $cooloffSisterKey, 1, self::COOLOFF_TTL ) &&
-					// Don't treat failures due to I/O errors as the key being in cool-off
-					$this->cache->getLastError( $watchPoint ) === self::ERR_NONE
-				) {
-					$this->logger->debug( "checkAndSetCooloff($key): bounced; {$elapsed}s" );
-					$this->stats->increment( "wanobjectcache.$kClass.cooloff_bounce" );
-
-					return false;
-				}
-			}
-		}
-
-		// Corresponding metrics for cache writes that actually get sent over the write
+		// TODO: Remove or restore after evaluation. https://phabricator.wikimedia.org/T321634
+		// --2023-03-22
 		$this->stats->timing( "wanobjectcache.$kClass.regen_set_delay", 1e3 * $elapsed );
-		$this->stats->updateCount( "wanobjectcache.$kClass.regen_set_bytes", $hypotheticalSize );
 
 		return true;
 	}
