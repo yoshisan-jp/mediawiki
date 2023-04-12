@@ -335,7 +335,7 @@ class ApiHelp extends ApiBase {
 					'anchor' => $anchor,
 					'line' => $headerContent,
 					'number' => implode( '.', $tocnumber ),
-					'index' => '',
+					'index' => false,
 				];
 				if ( empty( $options['noheader'] ) ) {
 					$help['header'] .= Html::rawElement(
