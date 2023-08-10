@@ -1143,3 +1143,6 @@ if ( window.QUnit ) {
 
 mw.util = util;
 module.exports = util;
+
+// T343944: Temporary investigation
+mw.util.wasMwUtilReady1 = ( mw.util !== undefined && typeof $.fn.updateTooltipAccessKeys === 'function' );
